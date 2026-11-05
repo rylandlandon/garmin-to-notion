@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytz
 from dotenv import load_dotenv, dotenv_values
@@ -13,9 +13,9 @@ load_dotenv()
 CONFIG = dotenv_values()
 
 
-def get_sleep_data(garmin):
+def get_sleep_data(garmin, days=1):
     today = datetime.today().date()
-    return garmin.get_sleep_data(today.isoformat())
+    return [garmin.get_sleep_data((today - timedelta(days=offset)).isoformat()) for offset in range(days)]
 
 
 def format_duration(seconds):
@@ -92,14 +92,15 @@ def main():
     load_dotenv()
 
     # Initialize Garmin and Notion clients using environment variables
-    garmin_client, _ = get_garmin_client()
+    garmin_client, garmin_configuration = get_garmin_client()
     notion_client, notion_dbs = get_notion_client()
 
     database_id = notion_dbs.sleep
 
-    data = get_sleep_data(garmin_client)
-    if data:
-        sleep_date = data.get('dailySleepDTO', {}).get('calendarDate')
+    for data in get_sleep_data(garmin_client, garmin_configuration.backfill_days):
+        if not data:
+            continue
+        sleep_date = (data.get('dailySleepDTO') or {}).get('calendarDate')
         if sleep_date and not sleep_data_exists(notion_client, database_id, sleep_date):
             create_sleep_data(notion_client, database_id, data, skip_zero_sleep=True)
 

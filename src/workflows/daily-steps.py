@@ -5,17 +5,13 @@ from dotenv import load_dotenv
 from src.helpers import get_garmin_client, get_notion_client
 
 
-def get_all_daily_steps(garmin):
+def get_all_daily_steps(garmin, days=1):
     """
-    Get last x days of daily step count data from Garmin Connect.
+    Get the last x days of daily step count data from Garmin Connect, excluding today.
     """
-    startdate = date.today() - timedelta(days=1)
-    daterange = [startdate + timedelta(days=x)
-                 for x in range((date.today() - startdate).days)]  # excl. today
-    daily_steps = []
-    for d in daterange:
-        daily_steps += garmin.get_daily_steps(d.isoformat(), d.isoformat())
-    return daily_steps
+    startdate = date.today() - timedelta(days=days)
+    enddate = date.today() - timedelta(days=1)
+    return garmin.get_daily_steps(startdate.isoformat(), enddate.isoformat())
 
 
 def daily_steps_exist(client, database_id, activity_date):
@@ -102,13 +98,15 @@ def main():
     load_dotenv()
 
     # Initialize Garmin and Notion clients using environment variables
-    garmin_client, _ = get_garmin_client()
+    garmin_client, garmin_configuration = get_garmin_client()
     notion_client, notion_dbs = get_notion_client()
 
     database_id = notion_dbs.daily_steps
 
-    daily_steps = get_all_daily_steps(garmin_client)
+    daily_steps = get_all_daily_steps(garmin_client, garmin_configuration.backfill_days)
     for steps in daily_steps:
+        if not steps.get('totalSteps'):
+            continue  # Skip days with no recorded steps
         steps_date = steps.get('calendarDate')
         existing_steps = daily_steps_exist(notion_client, database_id, steps_date)
         if existing_steps:
