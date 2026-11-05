@@ -41,12 +41,15 @@ def steps_need_update(existing_steps, new_steps):
     """
     existing_props = existing_steps['properties']
     activity_type = "Walking"
+    existing_title = existing_props['Activity Type']['title']
+    existing_activity_type = existing_title[0]['plain_text'] if existing_title else None
+    total_distance_km = round((new_steps.get('totalDistance') or 0) / 1000, 2)
 
     return (
         existing_props['Total Steps']['number'] != new_steps.get('totalSteps') or
         existing_props['Step Goal']['number'] != new_steps.get('stepGoal') or
-        existing_props['Total Distance (km)']['number'] != new_steps.get('totalDistance') or
-        existing_props['Activity Type']['title'] != activity_type
+        existing_props['Total Distance (km)']['number'] != total_distance_km or
+        existing_activity_type != activity_type
     )
 
 
