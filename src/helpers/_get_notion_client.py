@@ -1,7 +1,25 @@
 import os
+import time
 from dataclasses import dataclass
 
-from notion_client import Client
+from notion_client import APIErrorCode, APIResponseError, Client
+
+MAX_RATE_LIMIT_RETRIES = 8
+
+
+class RateLimitRetryingClient(Client):
+    """Notion client that waits and retries when Notion's rate limit is hit."""
+
+    def request(self, *args, **kwargs):
+        for attempt in range(MAX_RATE_LIMIT_RETRIES + 1):
+            try:
+                return super().request(*args, **kwargs)
+            except APIResponseError as error:
+                if error.code != APIErrorCode.RateLimited or attempt == MAX_RATE_LIMIT_RETRIES:
+                    raise
+                retry_after = error.headers.get("retry-after")
+                time.sleep(float(retry_after) if retry_after else min(2 ** attempt, 30))
+
 
 @dataclass(frozen=True)
 class NotionDatabases:
@@ -22,7 +40,7 @@ def get_notion_client() -> tuple[Client, NotionDatabases]:
     )
 
     notion_token = os.getenv("NOTION_TOKEN")
-    notion_client = Client(auth=notion_token)
+    notion_client = RateLimitRetryingClient(auth=notion_token)
 
     print("Notion client initialized.")
 
