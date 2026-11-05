@@ -8,6 +8,7 @@ from garminconnect import Garmin
 @dataclass(frozen=True)
 class GarminConfiguration:
     activity_fetch_limit: int
+    backfill_days: int
 
 
 def get_garmin_client() -> tuple[Garmin, GarminConfiguration]:
@@ -52,4 +53,5 @@ def _get_garmin_client() -> Garmin:
 def _get_garmin_configuration():
     return GarminConfiguration(
         activity_fetch_limit=int(os.getenv("GARMIN_ACTIVITIES_FETCH_LIMIT", "10")),
+        backfill_days=max(1, int(os.getenv("BACKFILL_DAYS", "1"))),
     )
