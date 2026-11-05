@@ -50,6 +50,20 @@ def sleep_data_exists(client, database_id, sleep_date):
     return results[0] if results else None  # Ensure it returns None instead of causing IndexError
 
 
+def get_sleep_score(sleep_data):
+    daily_sleep = sleep_data.get('dailySleepDTO') or {}
+    return ((daily_sleep.get('sleepScores') or {}).get('overall') or {}).get('value')
+
+
+def update_sleep_score(client, existing_sleep, sleep_data):
+    score = get_sleep_score(sleep_data)
+    current = (existing_sleep['properties'].get('Sleep Score') or {}).get('number')
+    if score is None or current == score:
+        return
+    client.pages.update(page_id=existing_sleep['id'], properties={"Sleep Score": {"number": score}})
+    print(f"Updated sleep score: {score}")
+
+
 def create_sleep_data(client, database_id, sleep_data, skip_zero_sleep=True):
     daily_sleep = sleep_data.get('dailySleepDTO', {})
     if not daily_sleep:
@@ -81,7 +95,8 @@ def create_sleep_data(client, database_id, sleep_data, skip_zero_sleep=True):
         "Deep Sleep": {"rich_text": [{"text": {"content": format_duration(daily_sleep.get('deepSleepSeconds', 0))}}]},
         "REM Sleep": {"rich_text": [{"text": {"content": format_duration(daily_sleep.get('remSleepSeconds', 0))}}]},
         "Awake Time": {"rich_text": [{"text": {"content": format_duration(daily_sleep.get('awakeSleepSeconds', 0))}}]},
-        "Resting HR": {"number": sleep_data.get('restingHeartRate', 0)}
+        "Resting HR": {"number": sleep_data.get('restingHeartRate', 0)},
+        "Sleep Score": {"number": get_sleep_score(sleep_data)}
     }
 
     client.pages.create(parent={"database_id": database_id}, properties=properties, icon={"emoji": "😴"})
@@ -101,7 +116,12 @@ def main():
         if not data:
             continue
         sleep_date = (data.get('dailySleepDTO') or {}).get('calendarDate')
-        if sleep_date and not sleep_data_exists(notion_client, database_id, sleep_date):
+        if not sleep_date:
+            continue
+        existing_sleep = sleep_data_exists(notion_client, database_id, sleep_date)
+        if existing_sleep:
+            update_sleep_score(notion_client, existing_sleep, data)
+        else:
             create_sleep_data(notion_client, database_id, data, skip_zero_sleep=True)
 
 
